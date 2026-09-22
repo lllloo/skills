@@ -2,9 +2,6 @@
   "name": "skills",
   "version": "1.0.0",
   "description": "自寫的 Agent Skills，經 npx skills 安裝",
-  "scripts": {
-    "test": "node --test \"test/*.test.js\""
-  },
   "engines": {
     "node": ">=18"
   },
