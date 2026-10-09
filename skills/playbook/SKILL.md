@@ -1,6 +1,6 @@
 ---
 name: playbook
-description: 僅在明確呼叫時啟動——使用者輸入 `/playbook`，或明講「查 playbook」「記進 playbook」才執行。就算任務涉及某個套件、使用者說「這個坑之前踩過」「記一下這個做法」，只要沒點名 playbook，一律不自動啟動、照一般方式回答。啟動後操作本機 `~/code/playbook`（lllloo/playbook）這份「踩坑 → 確定做法」卡片庫：`/playbook 關鍵字` 從 origin/main 的 Git tree 依功能情境查詢卡片並回答、`/playbook` 列出全部卡片、`/playbook add 主題` 起草卡片後從 origin/main 開 `card/slug` 分支並開 PR；絕不 commit 或 push main、絕不 merge PR。
+description: 僅在明確呼叫時啟動——使用者輸入 `/playbook`，或明講「查 playbook」「記進 playbook」才執行。就算任務涉及某個套件、使用者說「這個坑之前踩過」「記一下這個做法」，只要沒點名 playbook，一律不自動啟動、照一般方式回答。啟動後操作本機 `~/code/playbook`（lllloo/playbook）這份「踩坑 → 確定做法」卡片庫：`/playbook 關鍵字` 從 origin/main 的 Git tree 依功能情境查詢卡片並回答、`/playbook` 列出全部卡片、`/playbook add 主題` 起草卡片後從 origin/main 的隔離工作樹開卡片分支並開 PR；絕不 commit 或 push main、絕不 merge PR。
 ---
 
 # playbook：查詢與提案踩坑卡片
@@ -106,58 +106,48 @@ git -C "$REPO" grep -i -l -F -e '<情境詞>' -e '<同義詞或套件>' \
 使用者呼叫提案模式，就等於授權本次「開分支、commit、push 該分支、開 PR」這一串動作，不必再逐步確認。但以下紅線任何情況都不跨：
 
 - ⛔ 不 commit 到 main、不 push main、不 merge PR、不 force push。
-- ⛔ 工作樹不乾淨時不 stash、不 reset、不 checkout 掉別人的變更。
+- ⛔ 保留使用者主工作樹與無關修改；使用乾淨隔離工作樹，不 stash、不 reset、不覆寫他人變更。
 - ⛔ commit 遇 hook 失敗不加 `--no-verify` 繞過；修正卡片後重試，修不了就停下回報。
 
 ### 3.1 整理素材
 
 1. 從當前對話抓出「問題 → 確定做法」：適用情境、已驗證的可執行檢查事項、必要來源／版本；寫精簡提醒，不擴寫長教學或完整程式碼。素材不足（例如還不知道做法是否真的有效）就問使用者，不自己補。
 2. 素材是研究、推測、方案比較等**未確認可行**的內容 → 告訴使用者不適合進 playbook，停止。
-3. 先依 2.1、2.2 查有沒有同主題卡片。有 → 本次是**更新那張卡**（沿用其 slug，`created` 不動、`updated` 改今天）；沒有 → 新卡，依規格取 slug。另以 `gh pr list --repo lllloo/playbook --state open` 查看未合併提案並讀相關 PR 內容去重；明確標示「未接受提案」，不得混入正式查詢結果。同主題已有提案就停下回報該 PR，不另開重複提案。
+3. 先依 2.1、2.2 查有沒有同主題卡片。有 → 本次是**更新那張卡**（沿用其 slug，`created` 不動、`updated` 改今天）；沒有 → 新卡，依規格取 slug。另以 `gh pr list --repo lllloo/playbook --state open` 查看未合併提案並讀相關 PR 內容去重；明確標示「未接受提案」，不得混入正式查詢結果。同主題已有提案就回報該 PR，不另開重複提案；只有使用者明確授權更新該既有 PR 時，才沿用其分支。一般新增提案授權不等於更新既有 PR 的授權。
 
 ### 3.2 查證事實
 
 依 [references/card-format.md](references/card-format.md) 的「事實查證」：檢查事項中的 API 名、參數、預設值、版本行為，逐一對官方一手來源（官方文件、release notes、原始碼）。對得上的列進 `## 來源`；**查不到的不寫進卡片**，記下來放進 PR 說明的「未查證」段落。
 
-### 3.3 Git 流程（嚴格依序）
+### 3.3 Git 流程（隔離工作樹）
+
+先讀目標 repo 的 AGENTS.md。保留使用者目前分支及未提交檔案，查 `git -C "$REPO" worktree list --porcelain`；可沿用本次任務已有、分支正確且乾淨的隔離工作樹，不接管他人工作樹。以下 `$SLUG` 是原卡或新卡的 slug，`$BR` 是選定分支，`$WT` 是本次隔離工作樹的絕對路徑，選不存在的路徑建立；所有卡片寫入、驗證與 commit 都在 `$WT`，不切換主工作樹。
+
+1. `git -C "$REPO" fetch origin` 必須成功；提案寫入不能用離線快取當最新基底。
+2. 選分支與起點：
+   - **新卡**：`card/<slug>`，從最新 `origin/main` 建立。檢查本機及遠端是否已有該分支；存在就回報，不覆寫、不用後綴繞過同主題去重。
+   - **更新正式卡**：仍寫原 `cards/<slug>.md`，可選不衝突的 `card/<slug>-<簡短後綴>`，從最新 `origin/main` 建立。後綴只區分更新分支，不建立同主題第二張卡；已有相關 open PR 時依第 3.1 節處理。
+   - **明確授權更新既有 PR**：先核對該 PR 仍 open、head repo／分支與最新 head；若已 merged／closed 就停止回報，不新建或重開。沿用原 PR 分支，從 fetch 到的該遠端 head 起步；分支若已由他人工作樹使用，或本機同名分支有未推送／分歧內容，就停止回報，不 reset 或 force。未授權不得擅自更新。
+3. 建立乾淨隔離工作樹；以下為新分支的命令，`$BR` 是已核對未佔用的分支名：
 
 ```bash
-SLUG=<slug>
-BR="card/$SLUG"
-
-# 1. 工作樹必須乾淨；有任何輸出就停下告知使用者，什麼都不清
-git -C "$REPO" status --porcelain
-
-# 2. 取得最新 origin
-git -C "$REPO" fetch origin
-
-# 3. 分支不得已存在（本機或遠端）——存在代表可能有未合併的 PR，停下告知使用者
-git -C "$REPO" rev-parse --verify --quiet "refs/heads/$BR"
-git -C "$REPO" ls-remote --exit-code --heads origin "$BR"
-
-# 4. 從 origin/main 開分支（不從本機 main，本機可能落後）
-git -C "$REPO" switch -c "$BR" origin/main
-
-# 5. 寫檔：$REPO/cards/$SLUG.md（新建或更新），格式照 references/card-format.md
-
-# 6. 只 add 這張卡
-git -C "$REPO" add "cards/$SLUG.md"
-git -C "$REPO" commit -m "新增卡片：<title>"     # 更新既有卡片用「更新卡片：<title>」
-
-# 7. push 這條分支（明確指定，不用裸 git push）
-git -C "$REPO" push -u origin "$BR"
-
-# 8. 開 PR，繁中標題與說明
-gh pr create --repo lllloo/playbook --base main --head "$BR" \
-  --title "新增卡片：<title>" --body-file <說明檔>
-
-# 9. 切回 main
-git -C "$REPO" switch main
+git -C "$REPO" worktree add -b "$BR" "$WT" origin/main
+git -C "$WT" status --porcelain
 ```
 
-- 第 3 步的兩個指令**有輸出或 exit 0** 都代表分支已存在 → 停下，告訴使用者分支名，請他先處理既有分支／PR。
-- 第 4 步後任何一步失敗：停下回報失敗在哪一步與錯誤訊息，並盡量切回 main（`git -C "$REPO" switch main`）；切不回去就照實說目前停在哪條分支。不刪分支、不 reset。
-- `gh pr create` 一律帶 `--repo`，避免 gh 依 cwd 推到使用者當前專案。
+既有 PR 分支尚未在本機存在時，用 `git -C "$REPO" worktree add -b "$BR" "$WT" "origin/$BR"`；本機分支已存在且與遠端 head 一致、未被其他工作樹使用時，用 `git -C "$REPO" worktree add "$WT" "$BR"`。已有本次隔離工作樹時，先核對 branch、head 與乾淨狀態；`status --porcelain` 有任何輸出就停止回報，不清除任何未提交內容。
+
+4. 在 `$WT/cards/<slug>.md` 起草或更新，格式照 references/card-format.md；保留 created，更新 updated。只修改本次卡片，完成適用 lint、metadata 驗證及 `git -C "$WT" diff --check`。保留 main 防護 hook，不繞過失敗 hook。
+5. 只 add 本次卡片，再 commit、明確 push 原分支：
+
+```bash
+git -C "$WT" add "cards/$SLUG.md"
+git -C "$WT" commit -m "新增卡片：<title>"  # 更新用「更新卡片：<title>」
+git -C "$WT" push -u origin "$BR"
+```
+
+6. 新提案用 `gh pr create --repo lllloo/playbook --base main --head "$BR" --title "新增卡片：<title>" --body-file <說明檔>`（更新卡片調整標題）。已授權更新既有 PR 就核實原 PR 的遠端 head，回報原 URL，不另開 PR。`gh` 一律帶 `--repo`，不依 cwd 推到其他專案。
+7. 完成後保留隔離工作樹供檢視，回報其路徑。任一步失敗就停止，回報步驟、錯誤、分支與工作樹；不刪分支、不 reset、不為復原切換使用者主工作樹。
 
 PR 說明（寫到 scratchpad 的暫存檔再 `--body-file`）：
 
@@ -174,4 +164,4 @@ PR 說明（寫到 scratchpad 的暫存檔再 `--body-file`）：
 
 ### 3.4 回報
 
-完成後告訴使用者：PR URL、卡片路徑（`cards/<slug>.md`）、是新卡還是更新、「未查證」清單（若有）。合併請使用者到 GitHub 審核。
+完成後告訴使用者：PR URL、隔離工作樹路徑、卡片路徑（`cards/<slug>.md`）、是新卡還是更新、「未查證」清單（若有）。合併請使用者到 GitHub 審核。
