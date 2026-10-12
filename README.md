@@ -13,7 +13,8 @@
 |---|---|
 | `bmad-goal` | 依序跑完 BMAD 的 create-story → dev-story → code-review |
 | `herdr-agent` | 在 Herdr 內開新 tab 交派任務給另一個 coding agent |
-| `playbook` | 查詢 `lllloo/playbook` 踩坑卡片，或起草卡片並開 PR |
+
+playbook skill 已搬到 [lllloo/playbook](https://github.com/lllloo/playbook) 的 `skills/playbook/`，與卡片規範一起維護。
 
 ## 安裝
 
