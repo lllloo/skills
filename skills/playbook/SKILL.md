@@ -25,7 +25,7 @@ test -d "$REPO/.git" || echo "playbook repo 不存在"
 
 不存在就停下，請使用者自行執行 `gh repo clone lllloo/playbook ~/code/playbook`；不自行 clone、不改用其他路徑。
 
-## 1. 取得正式快照並讀規範（每個模式都先做）
+## 1. 取得正式快照（每個模式都先做）
 
 ```bash
 if ! git -C "$REPO" fetch origin '+refs/heads/main:refs/remotes/origin/main'; then
@@ -34,10 +34,15 @@ fi
 SNAPSHOT=$(git -C "$REPO" rev-parse --verify 'refs/remotes/origin/main^{commit}') || {
   echo "無 origin/main 快取，停止。" >&2; exit 1
 }
-git -C "$REPO" show "${SNAPSHOT}:AGENTS.md"
 ```
 
-讀完 AGENTS.md 再往下做。後續掃描、搜尋、讀卡都固定用這次的 `$SNAPSHOT`。fetch 失敗或無快取時怎麼處理，依 AGENTS.md「讀取與搜尋」。
+後續掃描、搜尋、讀卡都固定用這次的 `$SNAPSHOT`，不再重新 fetch main。提案模式下 fetch 失敗就停止，不能拿離線快取當基底。
+
+**查詢與提案**接著讀規範，讀完再往下做；列全部用不到規範，略過：
+
+```bash
+git -C "$REPO" show "${SNAPSHOT}:AGENTS.md"
+```
 
 ## 2. 分派模式
 
@@ -100,7 +105,7 @@ gh pr list --repo lllloo/playbook --state open
 
 `$SLUG`：原卡或新卡的 slug；`$BR`：分支名（命名依 AGENTS.md）。
 
-1. **確認基底與工作樹**：`git -C "$REPO" fetch origin` 必須成功（提案不能用離線快取當基底）。`git -C "$REPO" status --porcelain` 有輸出就列給使用者並詢問；使用者同意才繼續，且那些檔案一律不 add。
+1. **確認工作樹**：基底是第 1 節的 `origin/main`（該步 fetch 須成功）。`git -C "$REPO" status --porcelain` 有輸出就列給使用者並詢問；使用者同意才繼續，且那些檔案一律不 add。
 2. **確認分支未被佔用**（新分支）：
 
    ```bash
@@ -111,7 +116,7 @@ gh pr list --repo lllloo/playbook --state open
    任一有結果就回報，不覆寫，也不加後綴繞過去重。
 3. **切分支**：
    - 新卡／更新正式卡：`git -C "$REPO" switch -c "$BR" --no-track origin/main`
-   - 已授權更新既有 PR：先用 `gh pr view <號> --repo lllloo/playbook --json state,headRefName` 確認仍是 open（已 merged／closed 就停止）。本機沒有該分支時用 `switch -c "$BR" --track "origin/$BR"`；已存在則 `switch "$BR"` 後確認 `rev-parse "$BR"` 與 `"origin/$BR"` 相同，不同就停止。
+   - 已授權更新既有 PR：先用 `gh pr view <號> --repo lllloo/playbook --json state,headRefName` 確認仍是 open（已 merged／closed 就停止），再 `git -C "$REPO" fetch origin "+refs/heads/$BR:refs/remotes/origin/$BR"` 更新遠端分支（失敗就停止）。本機沒有該分支時用 `switch -c "$BR" --track "origin/$BR"`；已存在則 `switch "$BR"` 後確認 `rev-parse "$BR"` 與 `"origin/$BR"` 相同，不同就停止。
 4. **寫卡**：新卡從快照的 `templates/card.md` 起草；更新時保留 `created`、`updated` 改今天。只改 `cards/$SLUG.md`，然後跑 `git -C "$REPO" diff --check`。
 5. **提交與推送**：
 
