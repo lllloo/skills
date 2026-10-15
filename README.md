@@ -12,7 +12,6 @@
 | skill | 說明 |
 |---|---|
 | `bmad-goal` | 依序跑完 BMAD 的 create-story → dev-story → code-review |
-| `herdr-agent` | 在 Herdr 內開新 tab 交派任務給另一個 coding agent |
 
 ## 安裝
 
