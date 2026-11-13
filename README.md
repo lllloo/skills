@@ -2,9 +2,6 @@
 
 自寫的全域 [Agent Skills](https://agentskills.io)，經 `npx skills` 安裝到各裝置。
 
-設定同步工具在另一個 repo：[lllloo/ai-config-sync](https://github.com/lllloo/ai-config-sync)，
-其中的 `skills-lock.json` 記錄各裝置實際安裝了哪些 skill（含本 repo 與外部來源）。
-
 ## 目錄
 
 一 skill 一目錄：`skills/<name>/SKILL.md`。這是 `npx skills` 的慣例掃描位置。
