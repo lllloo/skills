@@ -12,6 +12,7 @@
 | skill | 說明 |
 |---|---|
 | `bmad-goal` | 依序跑完 BMAD 的 create-story → dev-story → code-review |
+| `nt` | Notion 任務看板（Projects / Tasks）：認領、開立任務，回報進度與卡住 |
 
 ## 安裝
 
