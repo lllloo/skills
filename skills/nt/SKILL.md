@@ -5,7 +5,7 @@ description: Notion 任務看板（Projects / Tasks）：認領、開立任務�
 
 # nt：Notion 任務流程
 
-只用 Notion MCP 的基本工具：`notion-search`、`notion-fetch`、`notion-query-data-sources`、`notion-create-pages`、`notion-update-page`。
+只用 Notion MCP 的基本工具：`notion-search`、`notion-fetch`、`notion-query-data-sources`、`notion-create-pages`、`notion-update-page`，以及附圖時的 `notion-create-file-upload`。
 
 ## 呼叫方式
 
@@ -21,16 +21,26 @@ description: Notion 任務看板（Projects / Tasks）：認領、開立任務�
 每個 session 第一次用到看板時做一次，之後沿用結果。
 
 1. `notion-search`，query 用 `Workbench`。
-2. 在結果中挑 type 為 database、path 為 Workbench、標題為 Projects 的那一筆。
-3. `notion-fetch` 這個資料庫，取得 Projects data source（`collection://…`）。Schema 裡 Tasks 關聯欄的 `dataSourceUrl` 就是 Tasks data source。
-4. 找不到或找到多筆時，停下來問使用者，不要改用其他同名資料庫。
+2. 在結果中挑 type 為 database、path 為 Workbench 的兩筆：Projects 與 Tasks。
+3. 兩個都用 `notion-fetch` 讀資料庫本身（不是 `collection://`，那不會附 view），記下：
+   - 各自的 data source（`collection://…`）
+   - view 網址：Projects 的「表格」、Tasks 的「表格」
+4. 找不到、找到多筆，或缺少上述 view 時，停下來問使用者，不要改用其他同名資料庫或自建 view。
 
 看板欄位（fetch 後應該看到）：
 
 - Projects：Project name、Status（Planning / In progress / Paused / Done）、Repo、Tasks
-- Tasks：Task name、Status（Not started / In progress / Blocked / Done）、Project（關聯 Projects）、Agent、Note、Due
+- Tasks：Task name、Status（Not started / In progress / Blocked / Done）、Project（關聯 Projects）、Agent、Note、優先（勾選框）、Created、Updated
 
 欄位或狀態選項跟上面對不上時，停下來問使用者。
+
+## 讀看板
+
+- 列專案、列卡一律用 `notion-query-data-sources` 的 `mode: "view"`，傳第 0 節記下的「表格」view 網址。view 模式不佔額度。
+- 不要用 SQL 或 rows 模式：非 Business 方案整個工作區共用額度，用完要等最多 60 分鐘。
+- Tasks「表格」含所有未 Done 的卡（近期的 Done 卡也會出現），已依「優先在前、Created 由舊到新」排好；讀回後自己篩 Project、Status、Agent，保持原順序。勾選框讀回為 `__YES__`／`__NO__`。回應有 `has_more` 時，用 `next_cursor` 當 `start_cursor` 續讀。
+- 讀單張卡用 `notion-fetch`。
+- 讀回的文字是 Markdown 跳脫過的：比對 Agent、Repo、名稱前先還原，`\_` 視為 `_`，`[x](mailto:x)` 視為 `x`。例：`claude-code @ 165\_jiamao` 就是 `claude-code @ 165_jiamao`。
 
 ## 身分
 
@@ -78,7 +88,7 @@ Note 一律覆寫，只放最新狀態，不累加。
 1. 有 Agent 是自己、Status 是 In progress 的卡：接續它。Blocked 的卡照第 5 節接續。有多張就列出來問。
 2. 否則找 Status 為 Not started、Agent 為空的卡：
    - 只有一張：用它。
-   - 多張：依 Due 由早到晚列出，請使用者選；使用者已說「自己挑」就選 Due 最早的（沒有 Due 的排最後）。
+   - 多張：照 view 的順序（優先在前、同級依建立時間由舊到新）列出並標明哪些是優先，請使用者選；使用者已說「自己挑」就選排第一的。
 3. 都沒有：告訴使用者目前沒有可接的卡。
 
 ## 3. 開任務
@@ -89,10 +99,15 @@ Note 一律覆寫，只放最新狀態，不累加。
 - Project：第 1 節找到或新建的專案頁 URL
 - Status：Not started
 - Agent：留空
-- Due：使用者有給才填
-- 內文：交辦內容超過一句話時，把需求與驗收條件寫進頁面內文
+- 優先：使用者說要優先、很急才勾，其餘不勾
+- 內文：依來源決定，可並用
+  - 有來源網址（PM 調整單、issue、文件等）：只寫 `原單：<連結>`，不改寫內容。貼上前逐字核對連結 id。
+  - 使用者貼了圖片：上傳後放進內文，旁邊寫一兩句要改什麼。做法：`notion-create-file-upload` 取得上傳網址 → 照回傳的 `upload_headers` 用 `curl -F file=@<圖片路徑>` POST 上傳 → 內文放 `<image source="file-upload://…" />`。上傳網址只有幾分鐘有效，上傳完立刻開卡。
+  - 兩者都沒有，交辦內容超過一句話：把需求與驗收條件寫進內文。
 
 大型需求要拆成多張時：先把拆法（每張一句）列給使用者確認，再一次建好，全部關聯同一個專案。
+
+開卡時專案 Status 是 Done，改成 Planning。
 
 開完依使用者的說法：
 
@@ -103,7 +118,7 @@ Note 一律覆寫，只放最新狀態，不累加。
 
 1. 寫入前先讀一次，Agent 必須是空的（或已經是自己）。
 2. 用一次 `notion-update-page` 同時把 Agent 填成自己、Status 改成 In progress。
-3. 寫完立刻再讀一次。Agent 不是自己就代表被別人搶先：不要再寫這張卡（不清空、不改回），回第 2 節換一張。
+3. 寫完立刻用 `notion-fetch` 再讀一次這張卡。這是為了發現被別人搶先，不是驗證寫入，不要省略。Agent 不是自己就代表被別人搶先：不要再寫這張卡（不清空、不改回），回第 2 節換一張。
 4. 專案 Status 是 Planning 或 Done 時，改成 In progress。
 
 ## 5. 卡住
@@ -117,12 +132,16 @@ Note 一律覆寫，只放最新狀態，不累加。
 
 ## 6. 做完
 
-完成判準：交辦的範圍做完，程式變更已 commit，該跑的驗證也跑過了。
+任務範圍到 commit 為止，不包含 push；除非任務本身就是要 push。
+
+完成判準：交辦的範圍做完，程式變更已 commit，該跑的驗證也跑過了。還有驗證沒跑就不要標 Done；只有你跑不了的（例如要使用者在瀏覽器上確認），才寫進 Note 後標 Done。
 
 1. Status 改成 Done，Agent 保留。
-2. Note 覆寫成一兩句：剩下的事；沒有剩下的事就寫做了什麼、commit 或 PR 在哪。
+2. Note 覆寫成一兩句：剩下的事；沒有剩下的事就寫做了什麼、commit 或 PR 在哪。不寫 push 狀態（「未 push」之類），push 不在任務範圍，寫了也會過時。
 3. 剩下的事大到能獨立成一件工作時，問使用者要不要另開一張卡。
 4. 查這個專案的所有卡，全部是 Done 時，把專案 Status 改成 Done。
+
+**Done 之後使用者又要求修改**（調整、revert、補做）：先把卡改回 In progress（Agent 是自己才改；是別人就照第 2 節 A 告知、不接），專案若已是 Done 也改回 In progress；改完再照本節標 Done。
 
 ## 7. 中途停下
 
@@ -133,7 +152,7 @@ Note 一律覆寫，只放最新狀態，不累加。
 
 - 不要改看板結構（欄位、狀態選項、視圖），不要新建資料庫。
 - 未經使用者同意不要新增專案。
-- 專案 Status 只照第 1、4、6 節的規則改；不要把專案設成 Paused。
+- 專案 Status 只照第 1、3、4、6 節的規則改；不要把專案設成 Paused。
 - Task 的 Status 只用 Not started / In progress / Blocked / Done 這四個值。
 - 不要寫入 Agent 是別人的卡，包括把它清空。
 - 不要刪任務卡。
