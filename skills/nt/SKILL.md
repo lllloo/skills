@@ -29,7 +29,7 @@ description: Notion 任務看板（Projects / Tasks）：認領、開立任務�
 
 看板欄位（fetch 後應該看到）：
 
-- Projects：Project name、Status（Planning / In progress / Paused / Done）、Repo、Tasks
+- Projects：Project name、Status（Idle / Planning / In progress）、Repo、Tasks
 - Tasks：Task name、Status（Not started / In progress / Blocked / Done）、Project（關聯 Projects）、Agent、Note、優先（勾選框）、Created、Updated
 
 欄位或狀態選項跟上面對不上時，停下來問使用者。
@@ -52,6 +52,17 @@ Agent 欄位格式為 `名稱 @ 來源`，例如 `claude-code @ 165_jiamao`。
 
 Note 一律覆寫，只放最新狀態，不累加。
 
+## 重算專案狀態
+
+卡片 Status 有變動（開卡、認領、Blocked、解除、完成、交還、重開）之後做：
+
+1. 用 Tasks「表格」view 讀卡，篩出 Project 是這個專案、Status 不是 Done 的卡（view 會帶到近期的 Done 卡，要排除）。剛寫入的那張以你寫入的狀態為準。
+2. 依剩下的卡決定專案 Status：
+   - 沒有未完成的卡：Idle
+   - 有 In progress 或 Blocked 的卡：In progress
+   - 只剩 Not started：Planning
+3. 跟專案目前的 Status 不同才寫入。
+
 ## 1. 對應專案
 
 1. 取得識別：
@@ -62,8 +73,7 @@ Note 一律覆寫，只放最新狀態，不累加。
 4. 沒有吻合：問使用者要關聯到哪個既有專案，還是新建一個。使用者同意新建時，用 `notion-create-pages` 在 Projects 建一列：
    - Project name：預設用主 repo 目錄名（非 git 時用資料夾名），先跟使用者確認
    - Repo：有 origin 就填 origin 網址，沒有就填本機路徑
-   - Status：Planning
-5. 專案 Status 是 Paused：先問使用者要不要繼續；同意才改回 In progress。
+   - Status：Idle
 
 ## 2. 選任務
 
@@ -109,7 +119,7 @@ Note 一律覆寫，只放最新狀態，不累加。
 
 一次開多張卡時，照來源順序（外部看板、清單或使用者列的順序）逐張呼叫 `notion-create-pages`，不要放進同一次呼叫：看板同級的卡依 Created 排序。
 
-開卡時專案 Status 是 Done，改成 Planning。
+開完照「重算專案狀態」更新專案；一次開多張時，全部開完再重算一次。
 
 開完依使用者的說法：
 
@@ -121,16 +131,16 @@ Note 一律覆寫，只放最新狀態，不累加。
 1. 寫入前先讀一次，Agent 必須是空的（或已經是自己）。
 2. 用一次 `notion-update-page` 同時把 Agent 填成自己、Status 改成 In progress。
 3. 寫完立刻用 `notion-fetch` 再讀一次這張卡。這是為了發現被別人搶先，不是驗證寫入，不要省略。Agent 不是自己就代表被別人搶先：不要再寫這張卡（不清空、不改回），回第 2 節換一張。
-4. 專案 Status 是 Planning 或 Done 時，改成 In progress。
+4. 照「重算專案狀態」更新專案。
 
 ## 5. 卡住
 
-1. Status 改成 Blocked，Note 寫具體問題或缺少的資訊。
+1. Status 改成 Blocked，Note 寫具體問題或缺少的資訊，再照「重算專案狀態」更新專案。
 2. 同時在對話裡向使用者提出同一個問題。Notion 上的留言你看不到，不要輪詢。
-3. 等使用者在對話中回覆，不要猜。解除後 Status 改回 In progress，Note 覆寫成目前進度或清空。
+3. 等使用者在對話中回覆，不要猜。解除後 Status 改回 In progress，Note 覆寫成目前進度或清空，再照「重算專案狀態」更新專案。
 4. session 要結束時仍未解除：維持 Blocked，Agent 不清空。
 
-**接續 Blocked 的卡**：先把 Note 裡的問題在對話中問使用者，得到答案才改回 In progress 繼續。
+**接續 Blocked 的卡**：先把 Note 裡的問題在對話中問使用者，得到答案才改回 In progress，照「重算專案狀態」更新專案後繼續。
 
 ## 6. 做完
 
@@ -141,20 +151,20 @@ Note 一律覆寫，只放最新狀態，不累加。
 1. Status 改成 Done，Agent 保留。
 2. Note 覆寫成一兩句：剩下的事；沒有剩下的事就寫做了什麼、commit 或 PR 在哪。不寫 push 狀態（「未 push」之類），push 不在任務範圍，寫了也會過時。
 3. 剩下的事大到能獨立成一件工作時，問使用者要不要另開一張卡。
-4. 查這個專案的所有卡，全部是 Done 時，把專案 Status 改成 Done。
+4. 照「重算專案狀態」更新專案。
 
-**Done 之後使用者又要求修改**（調整、revert、補做）：先把卡改回 In progress（Agent 是自己才改；是別人就照第 2 節 A 告知、不接），專案若已是 Done 也改回 In progress；改完再照本節標 Done。
+**Done 之後使用者又要求修改**（調整、revert、補做）：先把卡改回 In progress（Agent 是自己才改；是別人就照第 2 節 A 告知、不接），再照「重算專案狀態」更新專案；改完再照本節標 Done。
 
 ## 7. 中途停下
 
-- 做不完要交還：Agent 清空、Status 改回 Not started、Note 寫做到哪裡。
+- 做不完要交還：Agent 清空、Status 改回 Not started、Note 寫做到哪裡，再照「重算專案狀態」更新專案。
 - 使用者說整件不做了：不要刪卡，問使用者要怎麼處理。
 
 ## 不要做
 
 - 不要改看板結構（欄位、狀態選項、視圖），不要新建資料庫。
 - 未經使用者同意不要新增專案。
-- 專案 Status 只照第 1、3、4、6 節的規則改；不要把專案設成 Paused。
+- 專案 Status 只照「重算專案狀態」改（新建專案時填 Idle 除外）。
 - Task 的 Status 只用 Not started / In progress / Blocked / Done 這四個值。
 - 不要寫入 Agent 是別人的卡，包括把它清空。
 - 不要刪任務卡。
