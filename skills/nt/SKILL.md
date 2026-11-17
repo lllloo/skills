@@ -29,7 +29,7 @@ description: Notion 任務看板（Projects / Tasks）：認領、開立任務�
 
 看板欄位（fetch 後應該看到）：
 
-- Projects：Project name、Status（Idle / Planning / In progress）、Repo、Tasks
+- Projects：Project name、Status（Idle / Planning / In progress）、Repo、Tasks、Open tasks
 - Tasks：Task name、Status（Not started / In progress / Blocked / Done）、Project（關聯 Projects）、Agent、Note、優先（勾選框）、Created、Updated
 
 欄位或狀態選項跟上面對不上時，停下來問使用者。
@@ -54,14 +54,19 @@ Note 一律覆寫，只放最新狀態，不累加。
 
 ## 重算專案狀態
 
+Projects 有兩個關聯到 Tasks 的欄位：
+
+- Tasks：跟卡片的 Project 雙向關聯，保留完整歷史。不要直接寫這一欄，也不要從裡面移除卡。
+- Open tasks：單向關聯，只放這個專案還沒 Done 的卡，由本節維護。
+
 卡片 Status 有變動（開卡、認領、Blocked、解除、完成、交還、重開）之後做：
 
-1. 用 Tasks「表格」view 讀卡，篩出 Project 是這個專案、Status 不是 Done 的卡（view 會帶到近期的 Done 卡，要排除）。剛寫入的那張以你寫入的狀態為準。
+1. 用 Tasks「表格」view 讀卡，篩出 Project 是這個專案、Status 不是 Done 的卡（view 會帶到近期的 Done 卡，要排除）。剛寫入的那張以你寫入的狀態為準：剛開的卡還沒出現在 view 也要算進去，剛標 Done 的卡仍出現在 view 裡也要排除。
 2. 依剩下的卡決定專案 Status：
    - 沒有未完成的卡：Idle
    - 有 In progress 或 Blocked 的卡：In progress
    - 只剩 Not started：Planning
-3. 跟專案目前的 Status 不同才寫入。
+3. 用一次 `notion-update-page` 同時寫入專案的 Status 與 Open tasks。Open tasks 要給第 1 步篩出的完整卡片 URL 陣列（整欄覆寫，不是增減）；沒有未完成的卡時設成 `null`。這樣新開的卡會加入、Done 的卡會移出、重開的卡會再加回。
 
 ## 1. 對應專案
 
