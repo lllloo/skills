@@ -5,14 +5,14 @@ description: Notion 任務看板（Projects / Tasks）：認領、開立任務�
 
 # nt：Notion 任務流程
 
-只用 Notion MCP 的基本工具：`notion-search`、`notion-fetch`、`notion-query-data-sources`、`notion-create-pages`、`notion-update-page`，以及附圖時的 `notion-create-file-upload`。
+Notion 操作只用 MCP 的基本工具：`notion-search`、`notion-fetch`、`notion-query-data-sources`、`notion-create-pages`、`notion-update-page`，以及附圖時的 `notion-create-file-upload`。
 
 ## 呼叫方式
 
 - `/nt`：照第 2 節 C，接任務或做下一張。
 - `/nt <卡片 URL>`：照第 2 節 A。
 - `/nt <文字>`：照第 2 節 B。文字是卡片標題或要做的事都行，B 會先找相符的卡，找不到才開新卡，接著認領開做。
-- `/nt 新增 task <內容>`，或「新增／開 task」「記一下」這類只登記的說法：照第 3 節開卡就停，不認領、不實作。
+- `/nt 新增 task <內容>`，或「新增／開 task」「記一下」這類只登記的說法：照第 3 節開卡。
 
 沒用 `/nt`、而是用一般對話提到看板時，依對話內容判斷屬於 A、B、C 哪一種。
 
@@ -48,7 +48,7 @@ Agent 欄位格式為 `名稱 @ 來源`，例如 `claude-code @ 165_jiamao`。
 
 - 名稱：`claude-code`、`codex` 等。
 - 來源：`basename "$(git rev-parse --show-toplevel)"`（在 worktree 裡就是 worktree 目錄名）；不是 git repo 時用目前資料夾名。
-- Agent 字串完全相同才算自己。
+- Agent 字串完全相同才算自己。同一目錄同時開兩個同名 agent 的 session 會被當成同一人，要平行做就各開 worktree。
 
 Note 一律覆寫，只放最新狀態，不累加。
 
@@ -96,8 +96,6 @@ Projects 有兩個關聯到 Tasks 的欄位：
 
 找標題跟這段文字相符、Status 不是 Done 的卡。找到一張就照 A 處理；找到多張就列出來問；找不到就到第 3 節開新卡，開完接第 4 節認領。
 
-使用者只是要登記（「新增／開 task」「記一下」）時不走 B，直接到第 3 節開卡。
-
 **C. 只說「接任務」「做下一張」，或 `/nt` 不帶參數**：
 
 1. 有 Agent 是自己、Status 是 In progress 的卡：接續它。Blocked 的卡照第 5 節接續。有多張就列出來問。
@@ -135,7 +133,7 @@ Projects 有兩個關聯到 Tasks 的欄位：
 
 1. 寫入前先讀一次，Agent 必須是空的（或已經是自己）。
 2. 用一次 `notion-update-page` 同時把 Agent 填成自己、Status 改成 In progress。
-3. 寫完立刻用 `notion-fetch` 再讀一次這張卡。這是為了發現被別人搶先，不是驗證寫入，不要省略。Agent 不是自己就代表被別人搶先：不要再寫這張卡（不清空、不改回），回第 2 節換一張。
+3. 寫完立刻用 `notion-fetch` 再讀一次這張卡。這是為了發現被別人搶先，不是驗證寫入，不要省略。它能抓到多數搶卡，但不保證互斥：兩邊的寫入與重讀交錯時，雙方可能都讀到自己。Agent 不是自己就代表被別人搶先：不要再寫這張卡（不清空、不改回），回第 2 節換一張。
 4. 照「重算專案狀態」更新專案。
 
 ## 5. 卡住
