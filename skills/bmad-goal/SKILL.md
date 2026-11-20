@@ -23,7 +23,7 @@ description: '僅在明確呼叫時啟動——使用者輸入 `/bmad-goal`，�
 ## 輸入
 
 - story 代號，可多個：`18-8`、`16.10`、`epic 16 story 11` 都接受。正規化成 sprint-status.yaml 的 key（如 `18-8-change-order-master`）。
-- **只給 epic 號**（`16`、`epic 16`、`16 全部`）→ 從 sprint-status.yaml 撈出該 epic 底下所有狀態**不是 `done`** 的 story，依檔內順序排隊；開跑前先列出這份清單與各自目前狀態，再開始。已 `done` 的不回工。
+- **只給 epic 號**（`16`、`epic 16`、`16 全部`）→ 從 sprint-status.yaml 撈出該 epic 底下所有狀態**不是 `done`** 的 story，依檔內順序排隊；開跑前先列出這份清單與各自目前狀態，再開始。已 `done` 的預設不回工，但同樣要做「每個 story 的三段」第 1 步的未完切片掃描，掃到的併入開跑前那次提問。
 - 沒給任何代號 → 停下來問，不自行從 sprint-status 猜。
 
 ## 開跑前唯一的一次提問
@@ -31,7 +31,7 @@ description: '僅在明確呼叫時啟動——使用者輸入 `/bmad-goal`，�
 排好清單後、動手前，**由主線**問使用者一次（用 AskUserQuestion，一次問完）——subagent 問不了人，這一問只能在這裡做完：
 
 1. **要不要用 worktree（wt）處理？** 在目前 checkout 直接做，還是開獨立 worktree。
-2. 若選 worktree → **要不要獨立的 docker 環境？** (A) 不起 stack，只寫 code、lint／typecheck 用一次性容器；(B) 起獨立 stack 供驗證（本機 `wt-env up` 這類指令，依專案記憶）。這條分岔只有使用者知道，不自行決定。
+2. 若選 worktree → **要不要獨立的 docker 環境？** (A) 不起 stack，只寫 code、lint／typecheck 用一次性容器；(B) 起獨立 stack 供驗證（環境指令依專案記憶）。這條分岔只有使用者知道，不自行決定。
 
 問完之後整趟不再停。多個 story 共用同一個 worktree，依序做，不為每個 story 各開一個。答案要連同工作目錄的絕對路徑寫進每一份派工 prompt。
 
@@ -41,9 +41,9 @@ description: '僅在明確呼叫時啟動——使用者輸入 `/bmad-goal`，�
 
 ## 分支與 commit
 
-- 從 `develop` 開一條**主分支**跑整趟：單一 story 用 `story/<story-key>`；多個 story 用 `goal/<epic 或簡述>`（如 `goal/epic-16`），所有 story 都在這條上依序做。
-- 每個 story 收官（狀態轉 `done`）各自 commit，訊息沿用專案慣例（`feat(模組): Story X.Y【標題】…`）。**commit 由主線做**，在讀完 review 段交接檔、確認狀態為 `done` 之後；派工 prompt 要明寫「不要自己 commit」，避免三個 subagent 各切一刀。
-- **不合回 develop**、不 push 保護分支、不推 tag。收尾時列出主分支名與各 story 的 commit sha，合併由使用者自己做。
+- 從專案的整合分支（base，常見為 `develop`；從專案記憶或 CLAUDE.md 判斷，判斷不了就併入開跑前那次提問）開一條**主分支**跑整趟：單一 story 用 `story/<story-key>`；多個 story 用 `goal/<epic 或簡述>`（如 `goal/epic-16`），所有 story 都在這條上依序做。
+- 每個 story 收官（狀態轉 `done`）各自 commit，訊息沿用專案慣例（先看 `git log --oneline -20`）。**commit 由主線做**，在讀完 review 段交接檔、確認狀態為 `done` 之後；派工 prompt 要明寫「不要自己 commit」，避免三個 subagent 各切一刀。
+- **不合回 base**、不 push 保護分支、不推 tag。收尾時列出主分支名與各 story 的 commit sha，合併由使用者自己做。
 
 ## 執行順序：每段一個乾淨 context
 
@@ -83,7 +83,7 @@ description: '僅在明確呼叫時啟動——使用者輸入 `/bmad-goal`，�
    ⚠ 狀態 `review` 以後**不代表 dev 做完**——story 可能只交付了部分切片（如「本輪只做後端、前端留待下一輪」）。狀態為 `review`／`done` 時再掃 story 檔：有 `- [ ]` 未勾的 Task，或 Completion Notes 出現「本輪未做」「留待下一輪」「另輪」這類字樣 ⇒ 把「要不要補跑 dev 做那段」併入開跑前那次提問，不自行略過。
 2. **create**：狀態 `backlog` 或 story 檔不存在 → 派工跑 `bmad-create-story`，帶 story 代號。已 `ready-for-dev` 以後 → 略過並說明。
 3. **dev**：派工跑 `bmad-dev-story`，帶 story 檔路徑。狀態已 `review` 以後 → 略過並說明。
-4. **review**：派工跑 `bmad-code-review`，帶 story key；review 對象＝該 story 分支對 develop 的 diff 或未提交變更。依 triage 結果套 patch、跑 lint／test 到綠，狀態轉 `done`。
+4. **review**：派工跑 `bmad-code-review`，帶 story key；review 對象＝該 story 的未提交變更。主線在 review 後才 commit，所以此時本 story 的改動都還沒提交；不要用整條主分支對 base 的 diff，多個 story 時會混進前面已 commit 的 story。依 triage 結果套 patch、跑 lint／test 到綠，狀態轉 `done`。
 
 三段都要跑到；能省略的只有「已經完成」的段落。
 
@@ -109,8 +109,8 @@ Agent 回報完成 → 讀交接檔，以檔案內容為準。
 三個子 skill 都有 HALT 等人確認的步驟。本 skill 啟動時使用者已經授權「全部跑完」，所以：
 
 - 純「繼續？」類的檢查點直接視為 Y，往下走。
-- 子 skill 問「要 review 哪個／哪個分支」這類選項時，用已知的 story 脈絡自行選定（story key、story 分支、develop 為 base）。
-- 遇到不確定的事（AC 有多種解讀、實作與 spec 打架、要不要動共用元件）：**先查 spec**——story 檔、epics、page spec、project-context、既有 vue／程式碼。spec 講得清楚就照 spec 做，不停。
+- 子 skill 問「要 review 哪個／哪個分支」這類選項時，用已知的 story 脈絡自行選定（story key、本 story 的未提交變更、base 分支）。
+- 遇到不確定的事（AC 有多種解讀、實作與 spec 打架、要不要動共用元件）：**先查 spec**——story 檔、epics、相關設計文件、project-context、既有程式碼。spec 講得清楚就照 spec 做，不停。
 - 查完 spec 仍不確定 → 不猜、不停：選一個最保守的做法（不擴範圍、不動共用件、不刪欄位）繼續，並把問題寫進 `{implementation_artifacts}/deferred-work.md` 等使用者裁定。條目要寫清楚：story key、卡在哪、看過哪些 spec、目前採取的做法、要使用者裁什麼。
 
 寫進 deferred-work 是「暫定後繼續」，不是「跳過」。code-review 的 defer 類 findings 也走同一個檔。
@@ -125,7 +125,7 @@ Agent 回報完成 → 讀交接檔，以檔案內容為準。
 
 每個 story 一行：key、跑了哪幾段、略過的段落與原因、最終狀態、commit sha、寫進 deferred-work 的條數。全部跑完再給總表。
 
-選了獨立 worktree／docker stack 時，收尾固定附一行環境善後：stack 仍在跑（port、compose project 名）與收掉的指令（`cd <worktree> && wt-env down` 或 `purge`，之後 `git worktree remove <路徑>`）。不代做，由使用者決定何時收。
+選了獨立 worktree／docker stack 時，收尾固定附一行環境善後：stack 仍在跑（port、compose project 名）與收掉的指令（依專案記憶的環境收掉指令，之後 `git worktree remove <路徑>`）。不代做，由使用者決定何時收。
 
 收尾前用 `ListAgents` 掃一次，確認這趟派出的 subagent 都已收掉；還有殘留就補 `TaskStop`，並在收尾說明是哪幾隻、為什麼沒在該段收掉。
 
